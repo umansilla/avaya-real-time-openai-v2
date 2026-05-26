@@ -1,5 +1,6 @@
 fastapi
-uvicorn
+uvicorn[standard]
 websockets
 PyJWT
+cryptography
 python-dotenv
