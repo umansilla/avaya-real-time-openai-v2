@@ -240,7 +240,7 @@ class OpenAIBotServer:
 
         logger.info(f"[{client_id}] Conectando sesión {session_id} al API Realtime de OpenAI...")
         
-        url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"
+        url = "wss://api.openai.com/v1/realtime?model=gpt-realtime-mini"
         headers = {
             "Authorization": f"Bearer {self.openai_api_key}",
             "OpenAI-Beta": "realtime=v1"
@@ -545,6 +545,12 @@ def main():
 
     # Configuración de logs limpia apuntando a Consola estándar
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    
+    # =====================================================================
+    # SILENCIAR LOGGERS DE LA LIBRERÍA WEBSOCKETS (PARA EVITAR SPAM DE HEALTH CHECKS)
+    # =====================================================================
+    logging.getLogger("websockets.server").setLevel(logging.CRITICAL)
+    logging.getLogger("websockets.http11").setLevel(logging.CRITICAL)
     
     server_instance = OpenAIBotServer(
         host=args.host, port=args.port, 
