@@ -1,45 +1,51 @@
 import os
 import jwt
+import logging
 from fastapi import WebSocket, status
+
+# Configurar el logger para este módulo
+logger = logging.getLogger("auth_module")
 
 async def authenticate_avaya_ws(websocket: WebSocket) -> str:
     """
     Valida el token JWT enviado por Avaya en la cabecera Authorization.
     Retorna el Account ID si es válido. Si no lo es, cierra la conexión.
     """
-    # Extraemos el header de autorización
+    # Imprimimos todos los headers para depuración visual
+    logger.info(f"Nuevos Headers recibidos: {websocket.headers}")
+    
     auth_header = websocket.headers.get("Authorization")
     
     if not auth_header or not auth_header.startswith("Bearer "):
-        print("Conexión rechazada: Header Authorization ausente o inválido.")
+        logger.error("Conexión rechazada: Header Authorization ausente o no empieza con 'Bearer '.")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Missing or Invalid Token Format")
         return None
 
-    # Extraer solo el string del token
     token = auth_header.split(" ")[1]
+    logger.info(f"Token extraído (primeros 20 caracteres): {token[:20]}...")
     
-    # Llave primaria simétrica de tu entorno (Fase 1 - HS256)
     avaya_secret = os.getenv("AVAYA_PRIMARY_KEY") 
 
     if not avaya_secret:
-        print("Error del servidor: AVAYA_PRIMARY_KEY no configurada.")
+        logger.error("Error del servidor: Variable de entorno AVAYA_PRIMARY_KEY no configurada en Render.")
         await websocket.close(code=status.WS_1011_INTERNAL_ERROR, reason="Server Config Error")
         return None
 
     try:
-        # PyJWT valida automáticamente la firma y la fecha de expiración ('exp')
+        # Intentamos decodificar asumiendo Fase 1 (HS256)
         payload = jwt.decode(token, avaya_secret, algorithms=["HS256"])
-        
-        # El claim 'sub' contiene el Account ID de Avaya
         account_id = payload.get("sub")
-        print(f"Autenticación exitosa para la cuenta: {account_id}")
+        logger.info(f"Autenticación exitosa. Account ID: {account_id}")
         return account_id
 
     except jwt.ExpiredSignatureError:
-        print("Conexión rechazada: El token JWT ha expirado.")
+        logger.warning("Conexión rechazada: El token JWT ha expirado.")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Token Expired")
     except jwt.InvalidTokenError as e:
-        print(f"Conexión rechazada: Token inválido ({e}).")
+        logger.error(f"Conexión rechazada: Token inválido. Motivo: {e}")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid Token")
-    
+    except Exception as e:
+        logger.error(f"Error inesperado en la validación JWT: {e}")
+        await websocket.close(code=status.WS_1011_INTERNAL_ERROR, reason="Internal Error")
+        
     return None
